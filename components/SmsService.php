@@ -15,7 +15,7 @@ class SmsService extends Component
         parent::__construct($config);
     }
 
-    public function send($packMessages)
+    public function send($packMessages): bool
     {
         $send = array(
             'apikey' => $this->apiKey,
@@ -34,6 +34,13 @@ class SmsService extends Component
         // Тут просто проверка нет ли ошибок
         // На "боевом" проекте стоит добавить логирование отправки,
         // более подробную проверку ответа и т.д.
-        return !isset($result->error);
+        // Декодируем JSON ответ
+        $response = json_decode($result);
+
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return !isset($response->error);
+        } else {
+            return false;
+        }
     }
 }
