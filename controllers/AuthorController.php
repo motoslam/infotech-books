@@ -6,6 +6,7 @@ use app\models\User;
 use app\models\UsersAuthorsSubscription;
 use Yii;
 use app\models\Author;
+use app\components\AuthorSubscriptionService;
 use yii\data\ActiveDataProvider;
 use yii\db\StaleObjectException;
 use yii\filters\AccessControl;
@@ -16,6 +17,18 @@ use yii\filters\VerbFilter;
 
 class AuthorController extends BaseController
 {
+
+    private AuthorSubscriptionService $subscriptionService;
+
+    public function __construct(
+        $id,
+        $module,
+        AuthorSubscriptionService $subscriptionService,
+        $config = []
+    ) {
+        $this->subscriptionService = $subscriptionService;
+        parent::__construct($id, $module, $config);
+    }
 
     /**
      * @throws \Throwable
@@ -42,12 +55,7 @@ class AuthorController extends BaseController
     {
         $isSubscribed = false;
         if (!Yii::$app->user->isGuest) {
-            $isSubscribed = UsersAuthorsSubscription::find()
-                ->where([
-                    'users_id' => Yii::$app->user->id,
-                    'authors_id' => $id
-                ])
-                ->exists();
+            $isSubscribed = $this->subscriptionService->isSubscribed($id, Yii::$app->user->id);
         }
 
         return $this->render('view', [
@@ -124,53 +132,7 @@ class AuthorController extends BaseController
             ];
         }
 
-        $author = Author::findOne($id);
-        if (!$author) {
-            return [
-                'success' => false,
-                'message' => 'Автор не найден'
-            ];
-        }
-
-        $userId = Yii::$app->user->id;
-
-        $subscription = UsersAuthorsSubscription::findOne([
-            'users_id' => $userId,
-            'authors_id' => $id
-        ]);
-
-        try {
-            if ($subscription) {
-                // Отписываемся
-                $subscription->delete();
-
-                return [
-                    'success' => true,
-                    'subscribed' => false,
-                    'message' => 'Вы отписались от автора'
-                ];
-            } else {
-                // Подписываемся
-                $newSubscription = new UsersAuthorsSubscription();
-                $newSubscription->users_id = $userId;
-                $newSubscription->authors_id = $id;
-
-                if ($newSubscription->save()) {
-                    return [
-                        'success' => true,
-                        'subscribed' => true,
-                        'message' => 'Вы подписались на автора'
-                    ];
-                }
-            }
-        } catch (\Exception $e) {
-            Yii::error('Ошибка подписки: ' . $e->getMessage());
-        }
-
-        return [
-            'success' => false,
-            'message' => 'Произошла ошибка при изменении подписки'
-        ];
+        return $this->subscriptionService->toggleSubscription($id, Yii::$app->user->id);
     }
 
     /**

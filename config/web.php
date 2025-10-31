@@ -58,6 +58,13 @@ $config = [
             );
         },
     ],
+    'container' => [
+        'definitions' => [
+            app\components\AuthorSubscriptionService::class => [
+                'class' => app\components\AuthorSubscriptionService::class,
+            ],
+        ],
+    ],
     'params' => $params,
 ];
 
