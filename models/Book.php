@@ -49,7 +49,7 @@ class Book extends \yii\db\ActiveRecord
             [['title', 'photo'], 'string', 'max' => 255],
             [['year'], 'string', 'max' => 4],
             [['isbn'], 'string', 'max' => 13],
-            [['authorIds'], 'safe'],
+            [['authorIds'], 'each', 'rule' => ['integer']],
             [['authorIds'], 'required', 'message' => 'Необходимо выбрать хотя бы одного автора'],
         ];
     }
@@ -116,20 +116,39 @@ class Book extends \yii\db\ActiveRecord
     {
         parent::afterSave($insert, $changedAttributes);
 
-        if (!$this->isNewRecord) {
-            \Yii::$app->db->createCommand()
-                ->delete('authors_books', ['books_id' => $this->id])
-                ->execute();
-        }
+        if (property_exists($this, 'authorIds') && is_array($this->authorIds)) {
+            $currentAuthorIdsQuery = AuthorBook::find()
+                ->select('authors_id')
+                ->where(['books_id' => $this->id]);
 
-        if (!empty($this->authorIds)) {
-            foreach ($this->authorIds as $authorId) {
-                \Yii::$app->db->createCommand()
-                    ->insert('authors_books', [
-                        'books_id' => $this->id,
-                        'authors_id' => $authorId,
-                    ])
-                    ->execute();
+            $currentAuthorIds = array_map('intval', $currentAuthorIdsQuery->column());
+            $newAuthorIds = array_map('intval', $this->authorIds);
+
+            $idsToDelete = array_diff($currentAuthorIds, $newAuthorIds);
+            $idsToInsert = array_diff($newAuthorIds, $currentAuthorIds);
+
+            if (!empty($idsToDelete)) {
+                AuthorBook::deleteAll([
+                    'and',
+                    ['books_id' => $this->id],
+                    ['in', 'authors_id', $idsToDelete]
+                ]);
+            }
+
+            if (!empty($idsToInsert)) {
+                $rows = [];
+                foreach ($idsToInsert as $authorId) {
+                    if (is_numeric($authorId)) {
+                        $rows[] = [$this->id, $authorId];
+                    }
+                }
+                if (!empty($rows)) {
+                    \Yii::$app->db->createCommand()
+                        ->batchInsert(
+                            AuthorBook::tableName(),
+                            ['books_id', 'authors_id'], $rows
+                        )->execute();
+                }
             }
         }
     }
